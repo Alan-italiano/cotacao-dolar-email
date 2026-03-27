@@ -1,17 +1,49 @@
 import os
 import smtplib
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 
-def get_cotacao():
+def get_cotacao_bcb():
+    """API oficial do Banco Central do Brasil (PTAX) — sem rate limit."""
+    hoje = datetime.now()
+    # Tenta hoje e os 4 dias anteriores (fins de semana/feriados sem cotação)
+    for dias_atras in range(5):
+        data = hoje - timedelta(days=dias_atras)
+        data_str = data.strftime("%m-%d-%Y")
+        url = (
+            "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/"
+            f"CotacaoDolarDia(dataCotacao=@dataCotacao)"
+            f"?@dataCotacao='{data_str}'&$top=1&$orderby=dataHoraCotacao%20desc&$format=json"
+        )
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        valores = response.json().get("value", [])
+        if valores:
+            v = valores[0]
+            bid = float(v["cotacaoCompra"])
+            ask = float(v["cotacaoVenda"])
+            timestamp = v["dataHoraCotacao"][:16].replace("-", "/")
+            return {
+                "bid": bid,
+                "ask": ask,
+                "high": ask,
+                "low": bid,
+                "pct_change": 0.0,
+                "timestamp": timestamp,
+                "fonte": "Banco Central do Brasil (PTAX)",
+            }
+    raise ValueError("Nenhuma cotação encontrada nos últimos 5 dias úteis.")
+
+
+def get_cotacao_awesomeapi():
+    """Fallback: AwesomeAPI."""
     url = "https://economia.awesomeapi.com.br/json/last/USD-BRL"
     response = requests.get(url, timeout=10)
     response.raise_for_status()
     data = response.json()["USDBRL"]
-
     return {
         "bid": float(data["bid"]),
         "ask": float(data["ask"]),
@@ -21,7 +53,16 @@ def get_cotacao():
         "timestamp": datetime.fromtimestamp(int(data["timestamp"])).strftime(
             "%d/%m/%Y %H:%M"
         ),
+        "fonte": "AwesomeAPI",
     }
+
+
+def get_cotacao():
+    try:
+        return get_cotacao_bcb()
+    except Exception as e:
+        print(f"BCB falhou ({e}), tentando AwesomeAPI...")
+        return get_cotacao_awesomeapi()
 
 
 def build_email_body(cotacao):
@@ -73,7 +114,7 @@ def build_email_body(cotacao):
     </div>
     <div class="footer">
       Atualizado em: {cotacao['timestamp']}<br>
-      Fonte: AwesomeAPI — economia.awesomeapi.com.br
+      Fonte: {cotacao['fonte']}
     </div>
   </div>
 </body>
