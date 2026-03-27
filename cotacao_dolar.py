@@ -124,7 +124,7 @@ def build_email_body(cotacao):
 
 def send_email(cotacao):
     email_from = os.environ["EMAIL_FROM"]
-    email_to = os.environ["EMAIL_TO"]
+    destinatarios = [e.strip() for e in os.environ["EMAIL_TO"].split(",") if e.strip()]
     password = os.environ["EMAIL_PASSWORD"]
 
     data_hoje = datetime.now().strftime("%d/%m/%Y")
@@ -133,16 +133,16 @@ def send_email(cotacao):
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = email_from
-    msg["To"] = email_to
+    msg["To"] = ", ".join(destinatarios)
 
     html_body = build_email_body(cotacao)
     msg.attach(MIMEText(html_body, "html"))
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(email_from, password)
-        server.sendmail(email_from, email_to, msg.as_string())
+        server.sendmail(email_from, destinatarios, msg.as_string())
 
-    print(f"Email enviado para {email_to} | USD/BRL: R$ {cotacao['bid']:.4f}")
+    print(f"Email enviado para {', '.join(destinatarios)} | USD/BRL: R$ {cotacao['bid']:.4f}")
 
 
 if __name__ == "__main__":
