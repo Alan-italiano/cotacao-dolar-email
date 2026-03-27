@@ -1,0 +1,30 @@
+name: Cotação Diária do Dólar
+
+on:
+  schedule:
+    # Executa de segunda a sexta às 09:00 (horário de Brasília = UTC-3, então 12:00 UTC)
+    - cron: "0 12 * * 1-5"
+  workflow_dispatch: # Permite execução manual pela interface do GitHub
+
+jobs:
+  enviar-cotacao:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Executar script de cotação
+        env:
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        run: python cotacao_dolar.py
